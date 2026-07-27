@@ -17,7 +17,10 @@ Exactly two things:
    not match and the tool fails.
 2. **The chain is intact.** Each receipt points at the previous receipt's hash and
    the sequence is contiguous from genesis to head, so records cannot be removed,
-   reordered, or inserted without breaking a link.
+   reordered, or inserted without breaking a link. This second check applies only
+   when you pass a directory. A single receipt cannot show its own chain position,
+   and the tool says so rather than implying otherwise. See "One receipt versus a
+   chain" below.
 
 ## What a passing check does NOT prove
 
@@ -69,6 +72,39 @@ python3 telos_verify.py <path> --quiet             # verdict line only
 `INCOMPLETE` is never reported as a pass. This matters if you are wiring the tool
 into CI: `python3 telos_verify.py receipts/ && echo VERIFIED` prints nothing
 unless the exit code is `0`.
+
+### One receipt versus a chain
+
+The two modes prove different things, and the tool is explicit about which one
+you got.
+
+- **A directory** checks every hash **and** the chain linkage, so a pass means
+  both the payloads and their ordering are intact.
+- **A single receipt** checks the hash only. A single receipt cannot demonstrate
+  its own chain position, because the linkage lives in its neighbours. The tool
+  reports chain linkage as NOT EVALUABLE, and says so in the output rather than
+  quietly leaving it out. The exit code reflects the hash check alone.
+
+So a valid receipt exits `0` whatever its sequence number, and the run tells you
+plainly that chain integrity was not assessed:
+
+```
+$ python3 telos_verify.py vectors/valid/004_harmbench.json
+ok    004_harmbench.json  hash matches
+chain  NOT EVALUABLE from a single receipt. Chain linkage needs the neighbouring receipts,
+       so this run neither confirms nor denies chain integrity. Pass the directory to check the chain.
+
+VERIFIED (UNSIGNED): 1 receipt. The payload matches the recorded hash.
+NOTE: chain integrity was NOT assessed. A single receipt cannot show its own chain position.
+NOTE: these receipts carry no signature, so this does NOT establish who issued them or when.
+
+$ echo $?
+0
+```
+
+Absence of chain evidence is not evidence of tampering, so this is neither a pass
+nor a failure on that question. If you hold one receipt and want the chain
+checked too, you need the neighbouring receipts and should pass the directory.
 
 ## Test vectors, with real output
 
@@ -130,6 +166,12 @@ $ echo $?
 
 Note what the tool does not do: it does not guess which version was the true one.
 It reports that the record no longer matches its own hash and stops.
+
+**Why eight lines say `ok` under a directory named `tampered`.** Only one file in
+`vectors/tampered/` is altered. The other eight are byte-identical to the valid
+set on purpose, so the vector shows the tool finding the single bad record inside
+an otherwise intact set, which is the realistic case. A directory where every
+receipt failed would prove much less.
 
 ## How the hash is computed
 

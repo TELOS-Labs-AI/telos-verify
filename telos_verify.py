@@ -205,8 +205,19 @@ def main(argv: list[str]) -> int:
         if verify_one(f, rec, r):
             loaded.append((f, rec))
 
+    # A single receipt cannot demonstrate its own chain position: the neighbouring
+    # receipts are what close the linkage. Absence of that evidence is not evidence
+    # of tampering, so single-receipt mode must neither fail nor claim a pass on
+    # chain integrity. It says so instead, and the exit code rests on the hash alone.
+    single = len(files) == 1
     if loaded and len(files) == len(loaded):
-        verify_chain(loaded, r)
+        if single:
+            r.note("chain  NOT EVALUABLE from a single receipt. Chain linkage needs the "
+                   "neighbouring receipts,")
+            r.note("       so this run neither confirms nor denies chain integrity. "
+                   "Pass the directory to check the chain.")
+        else:
+            verify_chain(loaded, r)
 
     if not args.quiet:
         for line in r.lines:
@@ -215,8 +226,14 @@ def main(argv: list[str]) -> int:
 
     verdict = {VERIFIED: "VERIFIED", FAILED: "FAILED", INCOMPLETE: "INCOMPLETE"}[r.state]
     if r.state == VERIFIED and r.unsigned:
-        print(f"VERIFIED (UNSIGNED): {r.unsigned} receipt(s). The payload matches the "
-              f"recorded hash and the chain is intact.")
+        if single:
+            print(f"VERIFIED (UNSIGNED): {r.unsigned} receipt. The payload matches the "
+                  f"recorded hash.")
+            print("NOTE: chain integrity was NOT assessed. A single receipt cannot show "
+                  "its own chain position.")
+        else:
+            print(f"VERIFIED (UNSIGNED): {r.unsigned} receipt(s). The payload matches the "
+                  f"recorded hash and the chain is intact.")
         print("NOTE: these receipts carry no signature, so this does NOT establish "
               "who issued them or when.")
     else:
