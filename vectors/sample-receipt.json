@@ -1,0 +1,23 @@
+{
+  "receipt_version": "telos/0.1-unsigned",
+  "kind": "action_governed",
+  "agent_id": "demo-agent",
+  "payload": {
+    "action_name": "send_customer_email",
+    "action_params_hash": "sha256:0dabfdde7ab240266e7798c834c13ada37921438e2bbcc3140d6845185ebc29d",
+    "verdict": "EXECUTE",
+    "composite_score": 0.92,
+    "scores": {
+      "purpose_alignment": 0.94,
+      "scope_discipline": 0.91,
+      "risk_review": 0.9
+    },
+    "pa_id": "pa::demo::v1"
+  },
+  "issued_at": "2026-07-01T12:00:00+00:00",
+  "integrity_hash": "sha256:5c4eb662d34f9e0a142e138c0697fd6923e630277794b2059845dae5c965217a",
+  "covered_fields": "payload (canonical JSON, sort_keys, compact separators)",
+  "signing_status": "unsigned_integrity_hash",
+  "signature": null,
+  "engine": "telos v0.1 (unsigned integrity-hash; no governance engine wired)"
+}

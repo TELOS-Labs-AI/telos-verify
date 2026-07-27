@@ -1,0 +1,23 @@
+{
+  "agent_id": "TELOS-Labs-AI/public-benchmark-projection",
+  "covered_fields": "payload (canonical JSON, sort_keys, compact separators)",
+  "engine": "telos v0.1 (unsigned integrity-hash; no governance engine wired)",
+  "integrity_hash": "sha256:f0549f563add4bbfaf14b3bc172c0d5c305619030e090d2498f8c99319565d68",
+  "issued_at": "2026-07-14T10:02:14.153283Z",
+  "kind": "benchmark_reverification_projection",
+  "payload": {
+    "benchmark": "HarmBench",
+    "current": "0.00%",
+    "disposition": "REPRODUCES",
+    "expected_count": 400,
+    "previous_receipt_integrity_hash": "sha256:12b24f679a7dc5d57892a77437bbe0d6c4ad58208ec74732f2362ba0f516512d",
+    "published": "0.00%",
+    "published_source": "10.5281/zenodo.18370659",
+    "sequence": 4,
+    "source_chain_entry_hash": "3999f429eeb799adce3655debfd28bdaf71518bf5ccb32f29294514820f0ea55",
+    "source_chain_sequence": 18
+  },
+  "receipt_version": "telos/0.1-unsigned",
+  "signature": null,
+  "signing_status": "unsigned_integrity_hash"
+}

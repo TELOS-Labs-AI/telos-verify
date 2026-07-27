@@ -1,0 +1,23 @@
+{
+  "agent_id": "TELOS-Labs-AI/public-benchmark-projection",
+  "covered_fields": "payload (canonical JSON, sort_keys, compact separators)",
+  "engine": "telos v0.1 (unsigned integrity-hash; no governance engine wired)",
+  "integrity_hash": "sha256:41c988874a2791ec653fbd05fc503d3691bb538dce9dc23c0fcca0257efaa1aa",
+  "issued_at": "2026-07-14T10:01:45.850710Z",
+  "kind": "benchmark_reverification_projection",
+  "payload": {
+    "benchmark": "XSTest Healthcare-HIPAA",
+    "current": "8.00%",
+    "disposition": "REPRODUCES",
+    "expected_count": 250,
+    "previous_receipt_integrity_hash": "sha256:edb166fb23ff0ebc3e2dfcd8fe1943a30d0577a712e0b32b2011c6697f98cb11",
+    "published": "8.00%",
+    "published_source": "10.5281/zenodo.18370603",
+    "sequence": 2,
+    "source_chain_entry_hash": "f81ce26e74da4ea9da07587009656979c3f62f363c0cddf3337d24a650369d7a",
+    "source_chain_sequence": 14
+  },
+  "receipt_version": "telos/0.1-unsigned",
+  "signature": null,
+  "signing_status": "unsigned_integrity_hash"
+}

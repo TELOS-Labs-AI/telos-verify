@@ -1,0 +1,23 @@
+{
+  "agent_id": "TELOS-Labs-AI/public-benchmark-projection",
+  "covered_fields": "payload (canonical JSON, sort_keys, compact separators)",
+  "engine": "telos v0.1 (unsigned integrity-hash; no governance engine wired)",
+  "integrity_hash": "sha256:7c5d3f2dd6a67e0341d2997eedb3b2ed56fe461280f4a82775400342fc8c39b5",
+  "issued_at": "2026-07-14T10:04:01.491378Z",
+  "kind": "benchmark_reverification_projection",
+  "payload": {
+    "benchmark": "PropensityBench",
+    "current": "100.00% DSR",
+    "disposition": "REPRODUCES",
+    "expected_count": 977,
+    "previous_receipt_integrity_hash": "sha256:3ca4cea17911632a0eabf710ff63f49b24e550d8f6ea3b468a7117f54976420b",
+    "published": "100% DSR",
+    "published_source": "10.5281/zenodo.18562833",
+    "sequence": 7,
+    "source_chain_entry_hash": "ba55e5f200d7671d7afec512f2ace5f0798c54ac254825a65868eb2f3b22aaa8",
+    "source_chain_sequence": 24
+  },
+  "receipt_version": "telos/0.1-unsigned",
+  "signature": null,
+  "signing_status": "unsigned_integrity_hash"
+}

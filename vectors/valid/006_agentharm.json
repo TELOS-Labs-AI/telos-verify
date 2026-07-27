@@ -1,0 +1,23 @@
+{
+  "agent_id": "TELOS-Labs-AI/public-benchmark-projection",
+  "covered_fields": "payload (canonical JSON, sort_keys, compact separators)",
+  "engine": "telos v0.1 (unsigned integrity-hash; no governance engine wired)",
+  "integrity_hash": "sha256:3ca4cea17911632a0eabf710ff63f49b24e550d8f6ea3b468a7117f54976420b",
+  "issued_at": "2026-07-14T10:02:39.564867Z",
+  "kind": "benchmark_reverification_projection",
+  "payload": {
+    "benchmark": "AgentHarm",
+    "current": "82.39% DSR (local MiniLM)",
+    "disposition": "DRIFTED",
+    "expected_count": 352,
+    "previous_receipt_integrity_hash": "sha256:8652ac3735cd4fb78970550eb421cf9152e95fb62ebe70ae74902d14db5fb88e",
+    "published": "100% DSR (Mistral)",
+    "published_source": "10.5281/zenodo.18564855",
+    "sequence": 6,
+    "source_chain_entry_hash": "ce3b1c00f64336676a6db7d8865b453b9eb7e1cb9b6e3ba7a554c56efad4053d",
+    "source_chain_sequence": 22
+  },
+  "receipt_version": "telos/0.1-unsigned",
+  "signature": null,
+  "signing_status": "unsigned_integrity_hash"
+}
