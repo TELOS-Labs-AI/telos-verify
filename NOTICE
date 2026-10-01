@@ -5,7 +5,9 @@ This product includes software developed by TELOS AI Labs Inc.
 
 Licensed under the Apache License, Version 2.0. See the LICENSE file.
 
-The receipts under vectors/ are published records from a benchmark
-re-verification run. They are unsigned integrity-hash receipts and are
-included as test vectors so that a third party can confirm this tool
-behaves as documented without needing to generate their own.
+The `vectors/valid/` directory is this repository's reference unsigned chain.
+`vectors/tampered/` deliberately alters one member, `vectors/fabricated/`
+contains fabricated content with a matching hash, and
+`vectors/sample-receipt.json` is synthetic. These fixtures demonstrate the
+tool's documented behavior; their inclusion does not establish provenance,
+external publication, or third-party validation of their contents.

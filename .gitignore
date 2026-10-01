@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pem
+*.key
+telos-signing-key*
+demo-keys/
+evidence/

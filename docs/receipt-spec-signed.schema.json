@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://telos-labs.ai/docs/receipt-spec-signed.schema.json",
+  "title": "TELOS Ed25519-signed integrity-hash receipt (telos/0.2-ed25519)",
+  "description": "The signed contract version. Its required outer fields and `action_governed` payload constraints are identical to telos/0.1-unsigned; only `receipt_version`, `signing_status` and `signature` differ. The integrity hash is unchanged: a key-free SHA-256 over the canonical JSON (sort_keys, compact separators, ensure_ascii escapes) of `payload`. The signature is an Ed25519 signature over the ASCII bytes of the `integrity_hash` string, so it commits to the payload transitively. It does NOT cover `issued_at`, `agent_id`, `kind` or `engine`, which sit outside the hash. A successful verification establishes only that the signature verifies under a supplied public key for this payload hash. Binding that key to an identity or controller is outside this schema and verifier; the check does not establish when.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "receipt_version", "kind", "agent_id", "payload", "issued_at",
+    "integrity_hash", "covered_fields", "signing_status", "signature", "engine"
+  ],
+  "properties": {
+    "receipt_version": {
+      "type": "string",
+      "const": "telos/0.2-ed25519",
+      "description": "Which receipt contract produced this record. The name states the signing algorithm."
+    },
+    "kind": {
+      "type": "string",
+      "description": "What kind of record this is. Outside the hash and therefore outside the signature."
+    },
+    "agent_id": {
+      "type": "string",
+      "description": "Which agent did the work. Outside the hash and therefore outside the signature."
+    },
+    "payload": {
+      "type": "object",
+      "description": "The part the integrity hash covers, and so the part the signature commits to. Must be JSON-native and finite."
+    },
+    "issued_at": {
+      "type": "string",
+      "description": "ISO 8601 timestamp of issue. Deliberately outside the hash so the same logical payload always yields the same hash. NOT covered by the signature: a signed receipt does not date itself."
+    },
+    "integrity_hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "description": "Key-free SHA-256 over the canonical JSON serialization of `payload`, and the exact string the signature is computed over."
+    },
+    "covered_fields": {
+      "type": "string",
+      "const": "payload (canonical JSON, sort_keys, compact separators)",
+      "description": "States exactly what the hash covers."
+    },
+    "signing_status": {
+      "type": "string",
+      "const": "ed25519_signed",
+      "description": "The receipt's own declaration that it carries an Ed25519 signature."
+    },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "covers", "value"],
+      "description": "The signature block. A verifier must check `algorithm` and `covers` before verifying, and refuse a receipt declaring anything it does not implement rather than verify the wrong bytes.",
+      "properties": {
+        "algorithm": {
+          "type": "string",
+          "const": "ed25519",
+          "description": "The signature algorithm, RFC 8032 Ed25519."
+        },
+        "covers": {
+          "type": "string",
+          "const": "integrity_hash (ASCII bytes of the sha256: string)",
+          "description": "States exactly what was signed, so a verifier signs the same bytes or refuses."
+        },
+        "public_key": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{43}=$",
+          "description": "Base64 of the 32 raw public key bytes. DIAGNOSTIC ONLY. This is not a trust anchor: a forger writes both the signature and the key printed beside it. A verifier must check the signature against a key obtained out of band, and must not reach a pass using this field."
+        },
+        "key_id": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "description": "Optional label for the signing key, SHA-256 over the 32 raw public key bytes. Also diagnostic, and carries no more authority than `public_key`."
+        },
+        "value": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9+/]{86}==$",
+          "description": "Base64 of the 64-byte Ed25519 signature over the ASCII bytes of `integrity_hash`."
+        }
+      }
+    },
+    "engine": {
+      "type": "string",
+      "description": "Which engine produced the payload. Outside the hash and therefore outside the signature."
+    }
+  },
+  "if": {
+    "properties": { "kind": { "const": "action_governed" } }
+  },
+  "then": {
+    "properties": {
+      "payload": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["action_name", "action_params_hash", "verdict", "composite_score", "scores", "pa_id"],
+        "properties": {
+          "action_name": {
+            "type": "string",
+            "description": "The action the agent took."
+          },
+          "action_params_hash": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$",
+            "description": "A producer-supplied value in sha256:<64 lowercase hex> form. This public contract does not define which representation of the action parameters is hashed, or how to reproduce or open the value, and telos-verify does not recompute it. Omitting raw arguments avoids directly echoing them, but this deterministic digest can reveal equality and support offline guessing of low-entropy values; it is not a confidentiality guarantee."
+          },
+          "verdict": {
+            "type": "string",
+            "enum": ["EXECUTE", "CLARIFY", "SUGGEST", "ESCALATE", "INERT"],
+            "description": "The review outcome, from the public verdict vocabulary."
+          },
+          "composite_score": {
+            "type": "number",
+            "description": "Overall score of the action against its purpose anchor."
+          },
+          "scores": {
+            "type": "object",
+            "additionalProperties": { "type": "number" },
+            "description": "Per-dimension scores behind the composite."
+          },
+          "pa_id": {
+            "type": "string",
+            "description": "The purpose anchor: the declared, human-specified purpose the action was measured against."
+          }
+        }
+      }
+    }
+  }
+}

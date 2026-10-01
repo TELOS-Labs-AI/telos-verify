@@ -1,248 +1,89 @@
 #!/usr/bin/env python3
-"""telos-verify: offline verifier for TELOS integrity-hash receipts.
+"""telos-verify: offline verifier for TELOS receipts.
 
-WHAT THIS PROVES
-  1. The payload matches the hash recorded on the receipt.
-  2. Where receipts form a chain, each link points at the previous receipt's
-     hash and the sequence is contiguous.
+It knows telos/0.1-unsigned, telos/0.2-ed25519 and telos/0.3-ed25519. Any other
+receipt_version is INCOMPLETE (TV-VER-001), not judged.
 
-WHAT THIS DOES NOT PROVE
-  It does not establish WHO issued a receipt, or WHEN. The telos/0.1-unsigned
-  contract carries no digital signature: `signature` is null and the receipt
-  says so about itself in `signing_status`. A matching hash means the payload
-  has not changed relative to the recorded hash. It does not authenticate the
-  issuer. This tool refuses to imply otherwise, which is why an unsigned result
-  is reported as VERIFIED (UNSIGNED) rather than a bare pass.
+WHAT A PASS SHOWS (only the checks that applied, each named in the output)
+  1. Structure and field forms. Every receipt is checked against section 1 of
+     the TELOS Receipt Standard v0.1 (TV-SCHEMA-001) and, for action_governed
+     payloads, the section 2 field rules (TV-S2-*); payload numbers and strings
+     must lie in the canonical JSON domain (TV-CANON-*). These rules are
+     implemented in telos_verify_lib/schema.py with the standard library. The
+     bundled JSON Schema files under docs/ are not read or run by this tool.
+  2. The recorded hash matches the canonical JSON encoding of the payload
+     supplied to this run. For an unsigned receipt this is an integrity
+     relationship, NOT validation of any claim inside the payload: anyone can
+     fabricate both content and hash.
+  3. Where receipts form a chain, each link points at the previous receipt's
+     hash and the sequence is contiguous from genesis. This catches a receipt
+     removed from the START or the MIDDLE. It does NOT catch one removed from
+     the newest end: nothing inside a set of receipts anchors its tail, so a
+     truncated chain and a complete one are indistinguishable from within. The
+     tool prints the head hash and says what it did not check; pinning that head
+     against an independently held record with --expected-head or
+     --expected-head-file is what closes the gap.
+  4. Where a receipt is signed AND you supply a public key you already trust,
+     that the Ed25519 signature over the integrity hash verifies under that key.
+     In anchored mode (--root-key with --trust-dir, or a test bundle), that it
+     verifies under a deployment key certified by the root key you supplied.
 
-NO NETWORK. This tool makes no network calls. It reads local files, hashes
-bytes, and compares. Standard library only, so there is nothing to install.
+WHAT A PASS DOES NOT SHOW
+  The structure and field checks look at the shape of a record, not at whether
+  what it says is true. They are not a run of a JSON Schema validator against
+  the bundled schema files.
 
-EXIT CODES, three states
-  0  VERIFIED    every check that could be run, passed
-  1  FAILED      a hash mismatch or a broken chain link. The record is not intact.
-  2  INCOMPLETE  verification could not be completed: unreadable input, an
-                 unknown contract version, or a receipt that claims to be signed
-                 while the material needed to check the signature is absent.
-                 INCOMPLETE is never reported as a pass.
+  Without a signature it does not establish WHO issued a receipt, or WHEN. The
+  telos/0.1-unsigned contract carries no digital signature: `signature` is null
+  and the receipt says so about itself in `signing_status`. A matching hash
+  means the payload has not changed relative to the recorded hash. It does not
+  authenticate the issuer. This tool refuses to imply otherwise. An unsigned
+  success is reported as VERIFIED (UNSIGNED INTEGRITY ONLY — CONTENT NOT
+  VALIDATED), followed by an explicit warning that anyone can mint content with
+  a matching hash. The warning survives --quiet.
+
+  With a signature it still proves only what the signature covers. The signature
+  is over the integrity hash, so it commits to the payload. Envelope metadata
+  that sits outside the hash — `issued_at`, `agent_id`, `kind`, `engine` — is
+  NOT covered by either the hash or the signature.
+
+  The public key embedded in a receipt is NEVER a trust anchor: a forger writes
+  both the signature and the key. A signature is only checked against a key you
+  supply out of band with --key, or, in anchored mode, against a certified key
+  that traces to the root key you supply with --root-key. With no such key the
+  tool reports INCOMPLETE and says the signature was not checked. It never
+  manufactures a pass.
+
+NO NETWORK. This tool makes no network calls. It reads local files, hashes the
+canonical JSON encoding of each supplied payload, and compares digests.
+
+DEPENDENCIES. The structure, integrity-hash and chain paths are standard library
+only, so the unsigned case needs nothing installed. Checking an Ed25519
+signature, and anchored mode, need `cryptography` (pip install cryptography).
+If it is absent, a signed receipt is reported INCOMPLETE — never a pass. See
+"Why a dependency" in the README.
+
+EXIT CODES, three states (every FAIL and INCOMPLETE line names its check id;
+--list-checks prints them all)
+  0  VERIFIED    every implemented check that applied passed, including the
+                 structure and field checks.
+  1  FAILED      at least one named check was contradicted: for example a
+                 structure or field check, a hash mismatch, a payload value
+                 outside the canonical domain, a broken chain link, a head-pin
+                 mismatch, or a signature that does not verify under a key you
+                 supplied. The tool does not decide which conflicting input is
+                 authoritative. FAILED outranks INCOMPLETE in one run.
+  2  INCOMPLETE  verification could not be completed: for example unreadable
+                 input, a file that repeats a JSON member name, an unknown
+                 contract version, a refused key, or a receipt that claims to be
+                 signed while the material needed to check the signature is
+                 absent. INCOMPLETE is never reported as a pass.
 """
 from __future__ import annotations
 
-import argparse
-import hashlib
-import json
-import pathlib
 import sys
 
-VERIFIED, FAILED, INCOMPLETE = 0, 1, 2
-
-# The one contract version this tool understands. A receipt announcing anything
-# else is INCOMPLETE rather than FAILED: we decline to judge what we do not know.
-KNOWN_VERSION = "telos/0.1-unsigned"
-UNSIGNED_STATUS = "unsigned_integrity_hash"
-
-# Exactly what the receipt's own `covered_fields` declares, and what the
-# published schema documents. Canonical JSON over `payload`: sorted keys,
-# compact separators, ensure_ascii escaping, UTF-8 bytes.
-COVERED = "payload (canonical JSON, sort_keys, compact separators)"
-
-
-def canonical_bytes(payload) -> bytes:
-    return json.dumps(
-        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
-        allow_nan=False,
-    ).encode("utf-8")
-
-
-def compute_hash(payload) -> str:
-    return "sha256:" + hashlib.sha256(canonical_bytes(payload)).hexdigest()
-
-
-class Result:
-    def __init__(self):
-        self.state = VERIFIED
-        self.lines: list[str] = []
-        self.unsigned = 0
-
-    def note(self, s): self.lines.append(s)
-
-    def fail(self, s):
-        self.lines.append("FAIL  " + s)
-        self.state = FAILED
-
-    def incomplete(self, s):
-        self.lines.append("INCOMPLETE  " + s)
-        # FAILED outranks INCOMPLETE: a proven break is worse than an unknown.
-        if self.state != FAILED:
-            self.state = INCOMPLETE
-
-
-def load(path: pathlib.Path, r: Result):
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        r.incomplete(f"{path}: no such file")
-    except json.JSONDecodeError as e:
-        r.incomplete(f"{path}: not valid JSON: {e}")
-    except OSError as e:
-        r.incomplete(f"{path}: unreadable: {e}")
-    return None
-
-
-def verify_one(path: pathlib.Path, receipt: dict, r: Result) -> bool:
-    """Check a single receipt's integrity hash. True if it verified."""
-    name = path.name
-
-    version = receipt.get("receipt_version")
-    if version != KNOWN_VERSION:
-        r.incomplete(f"{name}: unknown receipt_version {version!r}; this tool knows {KNOWN_VERSION!r}")
-        return False
-
-    if "payload" not in receipt:
-        r.fail(f"{name}: no payload to hash")
-        return False
-
-    recorded = receipt.get("integrity_hash")
-    if not isinstance(recorded, str) or not recorded.startswith("sha256:"):
-        r.fail(f"{name}: missing or malformed integrity_hash")
-        return False
-
-    covered = receipt.get("covered_fields")
-    if covered != COVERED:
-        # The receipt claims the hash covers something other than what this tool
-        # recomputes. Refuse rather than compare the wrong bytes and call it a pass.
-        r.incomplete(f"{name}: covered_fields is {covered!r}; this tool only recomputes {COVERED!r}")
-        return False
-
-    try:
-        actual = compute_hash(receipt["payload"])
-    except (TypeError, ValueError) as e:
-        r.incomplete(f"{name}: payload has no canonical JSON form: {e}")
-        return False
-
-    if actual != recorded:
-        r.fail(f"{name}: payload does not match recorded hash")
-        r.note(f"        recorded  {recorded}")
-        r.note(f"        recomputed {actual}")
-        return False
-
-    # Signature posture, stated plainly and never skipped silently.
-    status = receipt.get("signing_status")
-    sig = receipt.get("signature")
-    if status == UNSIGNED_STATUS and sig is None:
-        r.unsigned += 1
-    elif sig is not None:
-        r.incomplete(
-            f"{name}: receipt carries a signature, but this tool has no published "
-            "root key material to check it against. Integrity hash verified; "
-            "signature NOT checked."
-        )
-        return False
-    else:
-        r.incomplete(f"{name}: inconsistent signing state (signing_status={status!r}, signature present={sig is not None})")
-        return False
-
-    r.note(f"ok    {name}  hash matches")
-    return True
-
-
-def verify_chain(receipts: list[tuple[pathlib.Path, dict]], r: Result) -> None:
-    """Check sequence contiguity and prev-hash linkage across a chain."""
-    linked = []
-    for path, rec in receipts:
-        p = rec.get("payload", {})
-        if isinstance(p, dict) and "sequence" in p:
-            linked.append((path, rec, p))
-    if not linked:
-        r.note("chain  no sequence fields present; single-receipt mode, no linkage to check")
-        return
-
-    linked.sort(key=lambda t: t[2].get("sequence", 0))
-    expected_prev = None
-    for i, (path, rec, p) in enumerate(linked):
-        seq = p.get("sequence")
-        if seq != i:
-            r.fail(f"{path.name}: sequence {seq} is not contiguous, expected {i}")
-            return
-        prev = p.get("previous_receipt_integrity_hash")
-        if prev != expected_prev:
-            r.fail(f"{path.name}: broken link at sequence {seq}")
-            r.note(f"        points at {prev}")
-            r.note(f"        expected  {expected_prev}")
-            return
-        expected_prev = rec.get("integrity_hash")
-    r.note(f"ok    chain of {len(linked)} receipts links cleanly from genesis to head")
-    r.note(f"      head {expected_prev}")
-
-
-def main(argv: list[str]) -> int:
-    ap = argparse.ArgumentParser(
-        prog="telos-verify",
-        description="Verify TELOS integrity-hash receipts offline. Makes no network calls.",
-    )
-    ap.add_argument("path", help="a receipt .json file, or a directory of them")
-    ap.add_argument("--quiet", action="store_true", help="print only the verdict line")
-    args = ap.parse_args(argv[1:])
-
-    target = pathlib.Path(args.path).expanduser()
-    r = Result()
-
-    if target.is_dir():
-        files = sorted(p for p in target.glob("*.json"))
-        if not files:
-            r.incomplete(f"{target}: directory contains no .json receipts")
-            files = []
-    elif target.exists():
-        files = [target]
-    else:
-        r.incomplete(f"{target}: no such file or directory")
-        files = []
-
-    loaded = []
-    for f in files:
-        rec = load(f, r)
-        if rec is None:
-            continue
-        if verify_one(f, rec, r):
-            loaded.append((f, rec))
-
-    # A single receipt cannot demonstrate its own chain position: the neighbouring
-    # receipts are what close the linkage. Absence of that evidence is not evidence
-    # of tampering, so single-receipt mode must neither fail nor claim a pass on
-    # chain integrity. It says so instead, and the exit code rests on the hash alone.
-    single = len(files) == 1
-    if loaded and len(files) == len(loaded):
-        if single:
-            r.note("chain  NOT EVALUABLE from a single receipt. Chain linkage needs the "
-                   "neighbouring receipts,")
-            r.note("       so this run neither confirms nor denies chain integrity. "
-                   "Pass the directory to check the chain.")
-        else:
-            verify_chain(loaded, r)
-
-    if not args.quiet:
-        for line in r.lines:
-            print(line)
-        print()
-
-    verdict = {VERIFIED: "VERIFIED", FAILED: "FAILED", INCOMPLETE: "INCOMPLETE"}[r.state]
-    if r.state == VERIFIED and r.unsigned:
-        if single:
-            print(f"VERIFIED (UNSIGNED): {r.unsigned} receipt. The payload matches the "
-                  f"recorded hash.")
-            print("NOTE: chain integrity was NOT assessed. A single receipt cannot show "
-                  "its own chain position.")
-        else:
-            print(f"VERIFIED (UNSIGNED): {r.unsigned} receipt(s). The payload matches the "
-                  f"recorded hash and the chain is intact.")
-        print("NOTE: these receipts carry no signature, so this does NOT establish "
-              "who issued them or when.")
-    else:
-        print(f"{verdict}: {len(loaded)} of {len(files)} receipt(s) verified.")
-        if r.state == INCOMPLETE:
-            print("NOTE: INCOMPLETE is not a pass. Something could not be checked, see above.")
-
-    return r.state
-
+from telos_verify_lib.cli import main
 
 if __name__ == "__main__":
     sys.exit(main(sys.argv))

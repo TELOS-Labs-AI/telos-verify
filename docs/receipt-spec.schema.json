@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://telos-labs.ai/docs/receipt-spec.schema.json",
   "title": "TELOS unsigned integrity-hash receipt (telos/0.1-unsigned)",
-  "description": "The canonical envelope minted per observed agent action by the telos-receipt package. The integrity hash is a key-free SHA-256 over the canonical JSON (sort_keys, compact separators, ensure_ascii escapes) of `payload`. It confirms the payload matches the recorded hash; it is not a digital signature and does not establish who issued the receipt or when. `signature` is null in this contract version and `signing_status` declares the unsigned state; a later signed contract fills `signature` without changing this shape.",
+  "description": "The unsigned receipt envelope. The integrity hash is a key-free SHA-256 over the canonical JSON (sort_keys, compact separators, ensure_ascii escapes) of `payload`. It confirms the payload matches the recorded hash; it is not a digital signature and does not establish who issued the receipt or when. `signature` is null in this contract version and `signing_status` declares the unsigned state; the signed contract changes `receipt_version`, `signing_status`, and `signature` while retaining the other required fields and `action_governed` payload constraints.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -34,7 +34,7 @@
     "integrity_hash": {
       "type": "string",
       "pattern": "^sha256:[0-9a-f]{64}$",
-      "description": "Key-free SHA-256 over the canonical JSON serialization of `payload`. Recompute offline and compare; a match confirms the payload has not changed relative to the recorded hash."
+      "description": "Key-free SHA-256 over the canonical JSON serialization of `payload`. Recompute offline and compare; a match establishes equality between that canonical encoding and the recorded digest. Equivalent source whitespace and object-key order are outside this relationship."
     },
     "covered_fields": {
       "type": "string",
@@ -48,7 +48,7 @@
     },
     "signature": {
       "type": "null",
-      "description": "Null in telos/0.1-unsigned: not signed yet, and the receipt says so on itself. A later signed contract version fills this field and changes signing_status, with no change to the envelope shape."
+      "description": "Null in telos/0.1-unsigned: not signed yet, and the receipt says so on itself. The signed contract version fills this field and changes receipt_version and signing_status while retaining the other required fields and payload constraints."
     },
     "engine": {
       "type": "string",
@@ -72,7 +72,7 @@
           "action_params_hash": {
             "type": "string",
             "pattern": "^sha256:[0-9a-f]{64}$",
-            "description": "SHA-256 commitment to the exact action parameters. Raw arguments are never echoed, so the receipt is shareable without leaking content."
+            "description": "A producer-supplied value in sha256:<64 lowercase hex> form. This public contract does not define which representation of the action parameters is hashed, or how to reproduce or open the value, and telos-verify does not recompute it. Omitting raw arguments avoids directly echoing them, but this deterministic digest can reveal equality and support offline guessing of low-entropy values; it is not a confidentiality guarantee."
           },
           "verdict": {
             "type": "string",
