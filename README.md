@@ -2,6 +2,8 @@
 
 An offline command-line verifier for TELOS receipts.
 
+[Review this verifier in about 10 minutes](REVIEWING.md).
+
 Point it at a receipt, a directory of receipts, a JSON Lines chain file, or a test
 bundle. It checks each receipt's structure, recomputes the integrity hash from
 the canonical JSON encoding of each parsed payload, checks signatures against keys
