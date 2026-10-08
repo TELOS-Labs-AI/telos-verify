@@ -34,7 +34,6 @@ import hashlib
 import json
 import os
 import pathlib
-import stat
 import sys
 
 from cryptography.hazmat.primitives import serialization
@@ -81,18 +80,42 @@ def integrity_hash(payload) -> str:
 
 
 def keygen(out_dir: pathlib.Path) -> int:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    priv = Ed25519PrivateKey.generate()
-    priv_pem = priv.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
-    pub_pem = priv.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
     priv_path = out_dir / "telos-signing-key.pem"
     pub_path = out_dir / "telos-public-key.pem"
-    # private key first, locked down before bytes land
-    fd = os.open(str(priv_path), os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-    with os.fdopen(fd, "wb") as f:
-        f.write(priv_pem)
-    os.chmod(priv_path, stat.S_IRUSR | stat.S_IWUSR)
-    pub_path.write_bytes(pub_pem)
+    created = []
+    try:
+        # Refuse before any create, including dangling symlinks. Exclusive opens
+        # below also refuse targets created after this preflight.
+        for path in (priv_path, pub_path):
+            if os.path.lexists(path):
+                print(f"keygen refused: target already exists: {path}", file=sys.stderr)
+                return 1
+        out_dir.mkdir(parents=True, exist_ok=True)
+        priv = Ed25519PrivateKey.generate()
+        priv_pem = priv.private_bytes(Encoding.PEM, PrivateFormat.PKCS8, NoEncryption())
+        pub_pem = priv.public_key().public_bytes(Encoding.PEM, PublicFormat.SubjectPublicKeyInfo)
+        for path, data, mode in ((priv_path, priv_pem, 0o600), (pub_path, pub_pem, 0o644)):
+            fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, mode)
+            created.append(path)
+            try:
+                if path == priv_path:
+                    os.fchmod(fd, 0o600)
+                with os.fdopen(fd, "wb") as f:
+                    fd = None  # the file context now owns and closes it
+                    f.write(data)
+            finally:
+                if fd is not None:
+                    os.close(fd)
+    except OSError as e:
+        # Remove only targets whose exclusive create succeeded in this call.
+        # A concurrent creator's target is never ours to remove.
+        for path in reversed(created):
+            try:
+                path.unlink()
+            except OSError as cleanup_error:
+                print(f"keygen cleanup failed for {path}: {cleanup_error}", file=sys.stderr)
+        print(f"keygen refused: could not create key pair: {e}", file=sys.stderr)
+        return 1
     print(f"private key (KEEP SECRET, do not publish, do not commit): {priv_path} [mode 0600]")
     print(f"public key  (PUBLISH this): {pub_path}")
     print(pub_pem.decode("ascii"))

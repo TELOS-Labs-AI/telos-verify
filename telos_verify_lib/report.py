@@ -125,6 +125,10 @@ def print_signed(r: Result, loaded: list, chain_notes: list[str]) -> None:
         print(f"VERIFIED (SIGNED — CONTENT NOT VALIDATED): {r.signed} receipt(s). The "
               f"PAYLOAD-TO-HASH BINDING is established for {len(loaded)} receipt(s).")
     print_signed_basis(r)
+    if r.anchored:
+        print("NOTE: projection currency and completeness were NOT checked. Later rotate or revoke")
+        print("      entries may be missing from the supplied projection. This version has no")
+        print("      --expected-projection-head option to check an independently held projection head.")
     for line in chain_notes:
         print(line)
     print_schema_limitation()

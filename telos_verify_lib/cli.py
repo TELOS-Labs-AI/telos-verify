@@ -138,6 +138,12 @@ def run(args) -> int:
     if s.expected_head is not None:
         check_expected_head(s.expected_head, r)
 
+    # No receipt run may succeed with zero inputs or a silently skipped receipt.
+    # Keep any existing FAILED/INCOMPLETE diagnostic and its precedence intact.
+    if r.state == VERIFIED and (not files or len(s.loaded) < len(files)):
+        r.incomplete("TV-LOAD-001", f"only {len(s.loaded)} of {len(files)} receipt(s) "
+                     "passed; verification needs a nonempty, fully checked input set")
+
     if r.saw_failed and r.saw_incomplete:
         # Report the precedence decision only; the state is set by Result.incomplete
         # alone, so this line cannot mask a precedence bug.

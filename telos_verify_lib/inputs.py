@@ -9,6 +9,10 @@ from .keys import refused_certificate
 from .result import Result
 
 
+# JSON null is data, not a parse-failure sentinel.
+_UNUSABLE = object()
+
+
 class DuplicateKey(ValueError):
     """A JSON object carried the same member name twice."""
 
@@ -36,7 +40,7 @@ def no_duplicate_keys(pairs):
 
 
 def parse_json_text(text: str, where: str, r: Result):
-    """Parse one JSON document. None (with an INCOMPLETE line) if unusable."""
+    """Parse one JSON document; return _UNUSABLE with a diagnostic on failure."""
     try:
         return json.loads(text, object_pairs_hook=no_duplicate_keys)
     except DuplicateKey as e:
@@ -51,14 +55,14 @@ def parse_json_text(text: str, where: str, r: Result):
     except ValueError as e:
         # Belt and braces: any other parse-layer ValueError is an unknown, not a pass.
         r.incomplete("TV-LOAD-001", f"{where}: could not be parsed: {e}")
-    return None
+    return _UNUSABLE
 
 
 def as_receipt(obj, where: str, r: Result):
     # A receipt is an object. Anything else is not a receipt, and asking it for
     # fields would raise. INCOMPLETE is the honest verdict, and returning None
     # here keeps one crafted file from aborting a whole directory run.
-    if obj is None:
+    if obj is _UNUSABLE:
         return None
     if not isinstance(obj, dict):
         r.incomplete(

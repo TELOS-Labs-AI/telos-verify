@@ -630,6 +630,13 @@ through the certificates and projection you supplied. It does not show who contr
 that root key, and it shows nothing more about the receipts' content than a signed
 pass does.
 
+**An anchored pass without `--expected-projection-head` does not check projection
+currency or completeness.** It checks only the supplied projection; later entries,
+including key rotations or revocations, may have been omitted. This version does
+not implement `--expected-projection-head`, so every anchored pass has this limit.
+Stdout states it in both normal and `--quiet` output. `--expected-head` pins the
+receipt chain, not the Lineage Chain projection, and does not close this gap.
+
 ## A file that says two things is refused
 
 JSON does not forbid an object from carrying the same member name twice, and
