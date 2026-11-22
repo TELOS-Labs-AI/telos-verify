@@ -25,6 +25,32 @@ It knows three receipt versions:
 Any other version is reported INCOMPLETE (`TV-VER-001`), not judged. Checking a
 signature needs one optional dependency; see [Signed receipts](#signed-receipts).
 
+Public tools write the first two versions: `telos/0.1-unsigned` with the
+[telos-receipt](https://github.com/TELOS-Labs-AI/telos-receipt) SDK (which
+[telos-mcp](https://github.com/TELOS-Labs-AI/telos-mcp) also uses), and
+`telos/0.2-ed25519` with `telos_sign.py` in this repository. No public tool writes
+`telos/0.3-ed25519`. Terms such as "section 2", "S3" and
+"Lineage Chain" are defined under [Terms](#terms).
+
+## Terms
+
+- **TELOS Receipt Standard v0.1 (TRS).** The specification these checks implement.
+  It is not yet published. Until it is, the public statement of its rules is this
+  README (in particular [Structure and field checks](#structure-and-field-checks)
+  and [Anchored mode](#anchored-mode)), `python3 telos_verify.py --list-checks`,
+  `docs/SPEC_NOTE.md` and the two bundled JSON Schema files. Check ids such as
+  `TRS-S1-026` in the source name a rule in that standard.
+- **Section 1, section 2, S1, S2, S3.** Sections of the standard. Section 1 (S1)
+  is the receipt envelope and canonical form, section 2 (S2) the `action_governed`
+  scoring fields, and section 3 (S3) signatures, key trust and verifier behaviour.
+  "S3 3.2" is the anchored-mode trust directory layout; "section 3.6" is the check
+  registry printed by `--list-checks`.
+- **`trs-cert/0.1`.** A certificate by which a root key certifies a deployment
+  signing key for a scope and purpose. Anchored mode reads one per `*.cert.json`.
+- **Lineage Chain.** The root-signed, hash-linked log of key events (issue, rotate,
+  revoke) and receipt-chain checkpoints. Anchored mode reads its public projection,
+  `projection.jsonl`, one **`trs-lineage-projection/0.1`** entry per line.
+
 ## What a passing check shows
 
 Exit `0` means every check that applied to the input passed. Depending on the input,
@@ -77,12 +103,16 @@ here is not the same thing as a pass from a JSON Schema validator run against
 those files. The bundled schema files describe `telos/0.1-unsigned` and
 `telos/0.2-ed25519` only; there is no bundled schema file for `telos/0.3-ed25519`.
 
-The public contract does not define how `action_params_hash` is produced: it
-specifies neither a parameter serialization nor a recomputation/opening procedure,
-and this verifier checks only that the field has the `sha256:` plus 64 lowercase
-hex form. It is not a publicly reproducible commitment. Omitting raw arguments
-avoids echoing them, but a deterministic digest can reveal equality and support
-offline guessing of low-entropy values, so it does not keep those values secret.
+This verifier does not recompute `action_params_hash`; it checks only that the
+field has the `sha256:` plus 64 lowercase hex form. The raw parameters are not in
+the receipt, and the receipt does not record which producer built it. The public
+[telos-receipt](https://github.com/TELOS-Labs-AI/telos-receipt) SDK, and telos-mcp
+through it, sets the field to `compute_integrity_hash(action_params)`: SHA-256 over
+the same canonical JSON encoding used for the payload hash. Anyone who holds the
+parameters can recompute a value built that way; another producer may use a
+different construction. Omitting raw arguments avoids echoing them, but a
+deterministic digest can reveal equality and support offline guessing of
+low-entropy values, so it does not keep those values secret.
 
 The `telos/0.1-unsigned` contract carries no digital signature. The `signature`
 field is `null` and the receipt declares this about itself in `signing_status`.
@@ -318,9 +348,12 @@ directory; signed ones use a throwaway key generated for the run.
 
 ### 1. A chain that verifies
 
-Nine unsigned receipts supplied as this repository's reference valid set. The
-verifier checks their structure, internal hashes and linkage; it does not establish
-their provenance or byte-identity to any separately published copy.
+Nine unsigned receipts supplied as this repository's reference valid set. They
+are test fixtures: their payloads restate results from public safety benchmarks,
+but nothing in this repository supports those figures. The receipts are unsigned
+and the verifier checks shape, hashes and linkage, not content (see `NOTICE`), so
+read the payloads as sample data, not benchmark claims. The verifier does not
+establish their provenance or byte-identity to any separately published copy.
 
 ```
 $ python3 telos_verify.py vectors/valid
@@ -386,7 +419,7 @@ through a channel you trust independently of the receipts being checked.
 The same nine receipts, with exactly one change: in `004_harmbench.json` the
 payload's `current` field was edited from `0.00%` to `99.99%`, and the recorded
 `integrity_hash` was left untouched. This is the shape of change the receipt
-exists to reveal: someone restating a result after the fact.
+exists to reveal: a payload edited after its hash was recorded.
 
 ```
 $ python3 telos_verify.py vectors/tampered
@@ -845,7 +878,7 @@ pip install cryptography
 python3 -m unittest discover -s tests -v
 ```
 
-264 tests. Most drive the command-line tool in a subprocess and assert on exit
+284 tests. Most drive the command-line tool in a subprocess and assert on exit
 codes, because the exit code is what you would wire into CI; some call library
 functions directly. They include
 the signature negative controls above, the duplicate-key refusal on both the signed
@@ -862,15 +895,17 @@ path degrades to INCOMPLETE rather than to a pass.
 The suite itself needs `cryptography`: most test modules import it to generate
 keys.
 
-Runs for this release, each `Ran 264 tests` and `OK`:
+Runs for this commit, each `Ran 284 tests` and `OK`:
 
-- Python 3.9.6 with cryptography 50.0.0
-- Python 3.11.14 with cryptography 46.0.5
-- Python 3.14.5 with cryptography 49.0.0, and again with cryptography 50.0.1
+- Python 3.9.6 with cryptography 50.0.2
+- Python 3.11.14 with cryptography 50.0.2
+- Python 3.12.13 with cryptography 50.0.2
 
-On Python 3.12.13 without `cryptography`, 11 of the test modules could not be
-imported and the run failed, so that run says nothing about Python 3.12. Python 3.10 and 3.13 were not
-available and are unverified.
+Earlier commits, with fewer tests, were also run on Python 3.11.14 with
+cryptography 46.0.5 and on Python 3.14.5 with cryptography 49.0.0 and 50.0.1;
+those runs were not repeated at this count. Python 3.10, 3.13 and 3.14 are
+unverified at this commit. `tests/test_readme_claims.py` fails if the counts in
+this section stop matching the suite.
 
 `tests/sabotage_harness.py` breaks one named mechanism at a time in a disposable
 copy of the repository and reruns the tests meant to catch that break. It runs

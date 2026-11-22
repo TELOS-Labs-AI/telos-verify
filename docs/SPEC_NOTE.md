@@ -27,11 +27,12 @@ the whole system.
 - **Purpose anchor construction.** `pa_id` names a purpose anchor. How an anchor
   is built or represented is not described here.
 - **Action-parameter digest construction and confidentiality.**
-  `action_params_hash` is constrained only to `sha256:<64 lowercase hex>` form.
-  This public contract does not define a serialization, producer, recomputation,
-  or opening procedure for it, and `telos-verify` checks only that form; it does
-  not recompute the value. It is therefore not a publicly reproducible
-  commitment. Omitting raw arguments avoids echoing them, but a deterministic
+  `action_params_hash` is constrained only to `sha256:<64 lowercase hex>` form,
+  and `telos-verify` checks only that form; it does not recompute the value,
+  because the raw parameters are not in the receipt and the receipt does not
+  name its producer. The public telos-receipt SDK sets it to
+  `compute_integrity_hash(action_params)`, SHA-256 over the same canonical JSON
+  encoding as the payload hash; other producers may differ. Omitting raw arguments avoids echoing them, but a deterministic
   digest can still reveal equality and permit offline guessing of low-entropy
   parameter values, so the field does not keep those values secret.
 - **Payload shapes other than `action_governed`.** The envelope carries a `kind`
@@ -43,7 +44,8 @@ the whole system.
 A Draft 2020-12 JSON Schema validator can check a receipt against the bundled
 schema files. `telos-verify` does **not** load or run those files. Instead it has
 its own structure and field checks, written in Python with the standard library,
-that follow the TELOS Receipt Standard v0.1:
+that follow the TELOS Receipt Standard v0.1 (not yet published; the README's
+Terms section says where its rules are stated):
 
 - **Section 1 structure (`TV-SCHEMA-001`):** exactly the ten envelope members;
   string `kind`, `agent_id` and `engine`; an RFC 3339 `issued_at`; an object
